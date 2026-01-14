@@ -12,96 +12,109 @@ from telegram.ext import (
     ContextTypes
 )
 import uuid
+import logging
 
 BOT_TOKEN = "8155211870:AAHk1E1F98hT5P8OfQB_w_zyLl6IXZjtBEY"
 
-games = {}  # message_id : game data
+logging.basicConfig(level=logging.INFO)
+
+# inline_message_id / message_id : game data
+games = {}
 
 
-def board_markup(board):
-    kb = []
+def make_board(board):
+    keyboard = []
     for i in range(0, 9, 3):
-        kb.append([
+        keyboard.append([
             InlineKeyboardButton(board[i], callback_data=str(i)),
             InlineKeyboardButton(board[i+1], callback_data=str(i+1)),
             InlineKeyboardButton(board[i+2], callback_data=str(i+2)),
         ])
-    return InlineKeyboardMarkup(kb)
+    return InlineKeyboardMarkup(keyboard)
 
 
-def winner(b):
-    win = [
+def check_win(b):
+    wins = [
         (0,1,2),(3,4,5),(6,7,8),
         (0,3,6),(1,4,7),(2,5,8),
         (0,4,8),(2,4,6)
     ]
-    for x,y,z in win:
+    for x, y, z in wins:
         if b[x] == b[y] == b[z] != "⬜":
             return True
     return False
 
 
+# INLINE QUERY HANDLER
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = InlineQueryResultArticle(
         id=str(uuid.uuid4()),
         title="🎮 Start XOXO Game",
-        description="Inline Tic-Tac-Toe game",
+        description="Play Tic-Tac-Toe inline",
         input_message_content=InputTextMessageContent(
-            "❌ **XOXO Game Started!**\nPlayer ❌ turn"
+            "❌ **XOXO Game Started**\nTurn: ❌",
+            parse_mode="Markdown"
         ),
-        reply_markup=board_markup(["⬜"] * 9)
+        reply_markup=make_board(["⬜"] * 9)
     )
     await update.inline_query.answer([result], cache_time=0)
 
 
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# BUTTON HANDLER
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    msg_id = query.message.message_id
+    # INLINE FIX (MOST IMPORTANT)
+    game_id = query.inline_message_id or query.message.message_id
 
-    if msg_id not in games:
-        games[msg_id] = {
+    if game_id not in games:
+        games[game_id] = {
             "board": ["⬜"] * 9,
             "turn": "❌"
         }
 
-    game = games[msg_id]
-    idx = int(query.data)
+    game = games[game_id]
+    index = int(query.data)
 
-    if game["board"][idx] != "⬜":
+    if game["board"][index] != "⬜":
         return
 
-    game["board"][idx] = game["turn"]
+    game["board"][index] = game["turn"]
 
-    if winner(game["board"]):
+    # WIN
+    if check_win(game["board"]):
         await query.edit_message_text(
-            f"🏆 **{game['turn']} wins!**",
-            reply_markup=board_markup(game["board"]),
+            f"🏆 **{game['turn']} Wins!**",
+            reply_markup=make_board(game["board"]),
             parse_mode="Markdown"
         )
-        games.pop(msg_id)
+        games.pop(game_id, None)
         return
 
+    # DRAW
     if "⬜" not in game["board"]:
         await query.edit_message_text(
-            "🤝 **Draw!**",
-            reply_markup=board_markup(game["board"]),
+            "🤝 **Match Draw!**",
+            reply_markup=make_board(game["board"]),
             parse_mode="Markdown"
         )
-        games.pop(msg_id)
+        games.pop(game_id, None)
         return
 
+    # NEXT TURN
     game["turn"] = "⭕" if game["turn"] == "❌" else "❌"
 
     await query.edit_message_reply_markup(
-        reply_markup=board_markup(game["board"])
+        reply_markup=make_board(game["board"])
     )
 
 
+# APP START
 app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(InlineQueryHandler(inline_query))
-app.add_handler(CallbackQueryHandler(button))
 
-print("Inline XOXO Bot Running...")
+app.add_handler(InlineQueryHandler(inline_query))
+app.add_handler(CallbackQueryHandler(button_handler))
+
+print("✅ Inline XOXO Bot Running...")
 app.run_polling()
