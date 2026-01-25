@@ -1,9 +1,15 @@
-from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
+from telegram import (
+    Update,
+    InlineQueryResultArticle,
+    InputTextMessageContent
+)
 from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
-    InlineQueryHandler
+    InlineQueryHandler,
+    MessageHandler,
+    filters
 )
 import uuid
 
@@ -18,45 +24,65 @@ dice_words = {
     6: "SIX"
 }
 
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎲 Dice Bot Ready!\n\n"
-        "Inline use karo:\n"
-        "@YourBotUsername"
+        "🎲 Dice Bot Ready\n\n"
+        "Inline use:\n"
+        "@YourBotUsername\n\n"
+        "Ya /dice command use karo"
     )
 
-async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.inline_query
+# normal /dice command
+async def dice_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    dice_msg = await update.message.reply_dice(emoji="🎲")
+    value = dice_msg.dice.value
 
+    await update.message.reply_text(
+        f"🎲 Dice Rolled!\n"
+        f"Number: {value}\n"
+        f"Word: {dice_words[value]}"
+    )
+
+# inline query handler
+async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = InlineQueryResultArticle(
         id=str(uuid.uuid4()),
         title="🎲 Roll Dice",
-        description="Tap to roll a dice",
+        description="Send a dice",
         input_message_content=InputTextMessageContent(
             "🎲 Rolling Dice..."
         )
     )
+    await update.inline_query.answer([result], cache_time=0)
 
-    await query.answer([result], cache_time=0)
-
+# handle inline sent message
 async def handle_inline_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
 
-    if message.text == "🎲 Rolling Dice...":
-        dice_msg = await message.reply_dice(emoji="🎲")
-        value = dice_msg.dice.value
+    # safety check
+    if not message.text:
+        return
 
-        await message.reply_text(
-            f"🎲 Dice Rolled!\n"
-            f"Number: {value}\n"
-            f"Word: {dice_words[value]}"
-        )
+    if message.text != "🎲 Rolling Dice...":
+        return
 
+    dice_msg = await message.reply_dice(emoji="🎲")
+    value = dice_msg.dice.value
+
+    await message.reply_text(
+        f"🎲 Dice Rolled!\n"
+        f"Number: {value}\n"
+        f"Word: {dice_words[value]}"
+    )
+
+# app setup
 app = Application.builder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("dice", dice_cmd))
 app.add_handler(InlineQueryHandler(inline_query))
-app.add_handler(CommandHandler(None, handle_inline_message))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_inline_message))
 
-print("Inline Dice Bot running...")
+print("✅ Dice Bot Running...")
 app.run_polling()
