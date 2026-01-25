@@ -1,39 +1,38 @@
-from telethon import TelegramClient, events
-import asyncio
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-api_id = 123456      # my.telegram.org se
-api_hash = "API_HASH_HERE"
-session = "slot_userbot"
+BOT_TOKEN = "7643831340:AAGieuPJND4MekAutSf3xzta1qdoKo5mbZU"
 
-client = TelegramClient(session, api_id, api_hash)
+dice_words = {
+    1: "ONE",
+    2: "TWO",
+    3: "THREE",
+    4: "FOUR",
+    5: "FIVE",
+    6: "SIX"
+}
 
-TARGET_CHAT = -1001234567890  # group / channel id
-SLOT_EMOJI = "🎰"
-RUN = False
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🎲 Dice Bot Ready!\n\n"
+        "Command use karo:\n"
+        "/dice"
+    )
 
-@client.on(events.NewMessage(pattern="/startslot"))
-async def start_slot(event):
-    global RUN
-    RUN = True
-    await event.reply("🎰 Slot started, waiting for 777...")
-    while RUN:
-        msg = await client.send_message(TARGET_CHAT, SLOT_EMOJI)
-        await asyncio.sleep(1.8)  # timing is IMPORTANT
+async def dice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    dice_msg = await update.message.reply_dice(emoji="🎲")
+    value = dice_msg.dice.value
 
-@client.on(events.NewMessage)
-async def check_result(event):
-    global RUN
-    if event.message.dice:
-        value = event.message.dice.value
-        if value == 64:  # 🎰 ka jackpot value (777)
-            RUN = False
-            await event.reply("🔥 JACKPOT 777 HIT! STOPPED 🔥")
+    await update.message.reply_text(
+        f"🎲 Dice Rolled!\n"
+        f"Number: {value}\n"
+        f"Word: {dice_words[value]}"
+    )
 
-@client.on(events.NewMessage(pattern="/stopslot"))
-async def stop_slot(event):
-    global RUN
-    RUN = False
-    await event.reply("❌ Slot stopped")
+app = Application.builder().token(BOT_TOKEN).build()
 
-client.start()
-client.run_until_disconnected()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("dice", dice))
+
+print("Dice bot running...")
+app.run_polling()
